@@ -1,0 +1,6 @@
+#!/bin/sh
+
+getent group tb-coap-transport >/dev/null || groupadd -r tb-coap-transport
+getent passwd tb-coap-transport >/dev/null || \
+useradd -d /usr/share/tb-coap-transport -g tb-coap-transport -M -r tb-coap-transport -s /sbin/nologin \
+-c "Thingsboard application"

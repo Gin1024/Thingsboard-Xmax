@@ -1,0 +1,9 @@
+#!/bin/sh
+
+chown -R tb-mqtt-transport: /var/log/tb-mqtt-transport
+chown -R tb-mqtt-transport: /usr/share/tb-mqtt-transport
+
+if [ $1 -eq 1 ] ; then
+        # Initial installation
+        systemctl --no-reload enable tb-mqtt-transport.service >/dev/null 2>&1 || :
+fi

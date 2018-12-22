@@ -1,0 +1,6 @@
+#!/bin/sh
+
+chown -R tb-coap-transport: /var/log/tb-coap-transport
+chown -R tb-coap-transport: /usr/share/tb-coap-transport
+update-rc.d tb-coap-transport defaults
+

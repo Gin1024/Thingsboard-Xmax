@@ -1,0 +1,7 @@
+#!/bin/sh -e
+
+
+
+update-rc.d -f tb-mqtt-transport remove
+
+

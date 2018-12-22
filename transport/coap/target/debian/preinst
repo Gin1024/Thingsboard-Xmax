@@ -1,0 +1,26 @@
+#!/bin/sh -e
+
+case "$1" in
+    install)
+        
+        
+if ! getent group tb-coap-transport >/dev/null; then
+    addgroup --system tb-coap-transport
+fi
+
+if ! getent passwd tb-coap-transport >/dev/null; then
+    adduser --quiet \
+            --system \
+            --ingroup tb-coap-transport \
+            --quiet \
+            --disabled-login \
+            --disabled-password \
+            --home /usr/share/tb-coap-transport \
+            --no-create-home \
+            -gecos "Thingsboard application" \
+            tb-coap-transport
+fi
+
+        
+        ;;
+esac

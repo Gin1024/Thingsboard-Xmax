@@ -1,0 +1,11 @@
+[Unit]
+Description=tb-mqtt-transport
+After=syslog.target
+
+[Service]
+User=tb-mqtt-transport
+ExecStart=/usr/share/tb-mqtt-transport/bin/tb-mqtt-transport.jar
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

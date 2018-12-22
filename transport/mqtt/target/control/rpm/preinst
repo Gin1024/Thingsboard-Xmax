@@ -1,0 +1,6 @@
+#!/bin/sh
+
+getent group tb-mqtt-transport >/dev/null || groupadd -r tb-mqtt-transport
+getent passwd tb-mqtt-transport >/dev/null || \
+useradd -d /usr/share/tb-mqtt-transport -g tb-mqtt-transport -M -r tb-mqtt-transport -s /sbin/nologin \
+-c "Thingsboard application"

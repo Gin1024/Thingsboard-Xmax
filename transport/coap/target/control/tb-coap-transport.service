@@ -1,0 +1,11 @@
+[Unit]
+Description=tb-coap-transport
+After=syslog.target
+
+[Service]
+User=tb-coap-transport
+ExecStart=/usr/share/tb-coap-transport/bin/tb-coap-transport.jar
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

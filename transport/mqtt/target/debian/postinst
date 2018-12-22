@@ -1,0 +1,21 @@
+#!/bin/sh -e
+
+ec() {
+    echo "$@" >&2
+    "$@"
+}
+
+case "$1" in
+    configure)
+        
+
+        
+        
+chown -R tb-mqtt-transport: /var/log/tb-mqtt-transport
+chown -R tb-mqtt-transport: /usr/share/tb-mqtt-transport
+update-rc.d tb-mqtt-transport defaults
+
+
+        
+        ;;
+esac

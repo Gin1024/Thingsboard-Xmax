@@ -1,0 +1,6 @@
+#!/bin/sh
+
+getent group tb-http-transport >/dev/null || groupadd -r tb-http-transport
+getent passwd tb-http-transport >/dev/null || \
+useradd -d /usr/share/tb-http-transport -g tb-http-transport -M -r tb-http-transport -s /sbin/nologin \
+-c "Thingsboard application"

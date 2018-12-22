@@ -1,0 +1,21 @@
+#!/bin/sh -e
+
+ec() {
+    echo "$@" >&2
+    "$@"
+}
+
+case "$1" in
+    configure)
+        
+
+        
+        
+chown -R tb-http-transport: /var/log/tb-http-transport
+chown -R tb-http-transport: /usr/share/tb-http-transport
+update-rc.d tb-http-transport defaults
+
+
+        
+        ;;
+esac

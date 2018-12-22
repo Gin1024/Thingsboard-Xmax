@@ -1,0 +1,21 @@
+#!/bin/sh -e
+
+ec() {
+    echo "$@" >&2
+    "$@"
+}
+
+case "$1" in
+    configure)
+        
+
+        
+        
+chown -R tb-coap-transport: /var/log/tb-coap-transport
+chown -R tb-coap-transport: /usr/share/tb-coap-transport
+update-rc.d tb-coap-transport defaults
+
+
+        
+        ;;
+esac

@@ -1,0 +1,26 @@
+#!/bin/sh -e
+
+case "$1" in
+    install)
+        
+        
+if ! getent group tb-mqtt-transport >/dev/null; then
+    addgroup --system tb-mqtt-transport
+fi
+
+if ! getent passwd tb-mqtt-transport >/dev/null; then
+    adduser --quiet \
+            --system \
+            --ingroup tb-mqtt-transport \
+            --quiet \
+            --disabled-login \
+            --disabled-password \
+            --home /usr/share/tb-mqtt-transport \
+            --no-create-home \
+            -gecos "Thingsboard application" \
+            tb-mqtt-transport
+fi
+
+        
+        ;;
+esac

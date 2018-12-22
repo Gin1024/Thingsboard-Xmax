@@ -1,0 +1,9 @@
+#!/bin/sh -e
+
+
+
+if [ -e /var/run/tb-http-transport/tb-http-transport.pid ]; then
+    service tb-http-transport stop
+fi
+
+

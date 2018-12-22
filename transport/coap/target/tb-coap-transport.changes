@@ -1,0 +1,19 @@
+Format: 1.8
+Date: Sat, 8 Dec 2018 23:26:10 +0800
+Source: tb-coap-transport
+Binary: tb-coap-transport
+Architecture: all
+Version: 2.2.1~SNAPSHOT-1
+Urgency: low
+Maintainer: ginger
+Changed-By: ginger
+Description:
+ tb-coap-transport - tb-coap-transport
+Changes:
+ tb-coap-transport (2.2.1~SNAPSHOT-1) ; urgency=low
+Checksums-Sha1:
+ 2e71348d4fad200fad73cb1b6bf98b877da548c9 26204108 tb-coap-transport.deb
+Checksums-Sha256:
+ 6039f31753d4906ea231090262cc844ffd55956ab22cc8f7c7aeae3aaa0e4ee8 26204108 tb-coap-transport.deb
+Files:
+ f8e7e12251c93b6e873e871b907cb17f 26204108 java optional tb-coap-transport.deb

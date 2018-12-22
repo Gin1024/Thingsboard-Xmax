@@ -1,0 +1,3 @@
+#!/bin/sh
+
+update-rc.d -f tb-http-transport remove

@@ -1,0 +1,9 @@
+#!/bin/sh
+
+chown -R tb-coap-transport: /var/log/tb-coap-transport
+chown -R tb-coap-transport: /usr/share/tb-coap-transport
+
+if [ $1 -eq 1 ] ; then
+        # Initial installation
+        systemctl --no-reload enable tb-coap-transport.service >/dev/null 2>&1 || :
+fi

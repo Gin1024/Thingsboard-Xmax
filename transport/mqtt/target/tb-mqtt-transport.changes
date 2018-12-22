@@ -1,0 +1,19 @@
+Format: 1.8
+Date: Sat, 8 Dec 2018 23:26:03 +0800
+Source: tb-mqtt-transport
+Binary: tb-mqtt-transport
+Architecture: all
+Version: 2.2.1~SNAPSHOT-1
+Urgency: low
+Maintainer: ginger
+Changed-By: ginger
+Description:
+ tb-mqtt-transport - tb-mqtt-transport
+Changes:
+ tb-mqtt-transport (2.2.1~SNAPSHOT-1) ; urgency=low
+Checksums-Sha1:
+ 39a2514be3b05d7f994457b2a85c02cd293b391b 29437704 tb-mqtt-transport.deb
+Checksums-Sha256:
+ 8bc7caf148021a2466551a762272ca5e0b1a61905cd16eefe8c56dbf4d968b87 29437704 tb-mqtt-transport.deb
+Files:
+ 5b4c0f2fcc876e68b12bb18577775fa0 29437704 java optional tb-mqtt-transport.deb

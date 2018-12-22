@@ -1,0 +1,14 @@
+Source: tb-mqtt-transport
+Section: java
+Priority: optional
+Maintainer: ginger
+Uploaders: 
+Version: 2.2.1~SNAPSHOT-1
+Standards-Version: 3.8.3
+Package: tb-mqtt-transport
+Homepage: 
+Architecture: all
+Distribution: 
+Depends: openjdk-8-jre | java8-runtime | oracle-java8-installer | openjdk-8-jre-headless
+Description: tb-mqtt-transport
+ 
