@@ -32,18 +32,16 @@ export default class TbMapWidgetV2 {
         }
         this.utils = ctx.$scope.$injector.get('utils');
         this.drawRoutes = drawRoutes;
-        this.markers = [];
+        this.markers = [];//全部节点的markers
+        this.alarmMarkers = [];//发出警报的节点的markers
+        this.toFit = false;//警报节点居中信号，全部节点都没有警报时，全局居中
         if (this.drawRoutes) {
             this.polylines = [];
         }
-
         this.locationSettings = {};
-
         var settings = ctx.settings;
-
         this.callbacks = {};
         this.callbacks.onLocationClick = function(){};
-
         if (settings.defaultZoomLevel) {
             if (settings.defaultZoomLevel > 0 && settings.defaultZoomLevel < 21) {
                 this.defaultZoomLevel = Math.floor(settings.defaultZoomLevel);
@@ -61,6 +59,7 @@ export default class TbMapWidgetV2 {
         var minZoomLevel = this.drawRoutes ? 18 : 15;
 
         var initCallback = function() {
+            //console.log("initCallBack Here!");// eslint-disable-line
             tbMap.update();
             tbMap.resize();
         };
@@ -87,8 +86,10 @@ export default class TbMapWidgetV2 {
         } else if (mapProvider === 'tencent-map') {
             this.map = new TbTencentMap($element,this.utils, initCallback, this.defaultZoomLevel, this.dontFitMapBounds, minZoomLevel, settings.tmApiKey, settings.tmDefaultMapType);
         }
-    }
 
+
+        tbMap.initBounds = true;
+    }
     setCallbacks(callbacks) {
         Object.assign(this.callbacks, callbacks);
     }
@@ -127,6 +128,17 @@ export default class TbMapWidgetV2 {
         } else {
             this.locationSettings.latKeyName = this.ctx.settings.latKeyName || 'latitude';
             this.locationSettings.lngKeyName = this.ctx.settings.lngKeyName || 'longitude';
+            // change
+            this.locationSettings.tempTrhKeyName = this.ctx.settings.tempTrhKeyName || 'tempThreshold';
+            this.locationSettings.tempValKeyName = this.ctx.settings.tempValKeyName || 'TEMP';
+            this.locationSettings.phTrhKeyName = this.ctx.settings.phTrhKeyName || 'phThreshold';
+            this.locationSettings.phValKeyName = this.ctx.settings.phValKeyName || 'PH';
+            this.locationSettings.orpTrhKeyName = this.ctx.settings.phTrhKeyName || 'orpThreshold';
+            this.locationSettings.orpValKeyName = this.ctx.settings.orpValKeyName || 'ORP';
+            this.locationSettings.doTrhKeyName = this.ctx.settings.doTrhKeyName || 'doThreshold';
+            this.locationSettings.doValKeyName = this.ctx.settings.doValKeyName || 'DO';
+            this.locationSettings.ecTrhKeyName = this.ctx.settings.ecTrhKeyName || 'ecThreshold';
+            this.locationSettings.ecValKeyName = this.ctx.settings.phValKeyName || 'EC';
         }
 
         this.locationSettings.tooltipPattern = this.ctx.settings.tooltipPattern || "<b>${entityName}</b><br/><br/><b>Latitude:</b> ${"+this.locationSettings.latKeyName+":7}<br/><b>Longitude:</b> ${"+this.locationSettings.lngKeyName+":7}";
@@ -134,8 +146,7 @@ export default class TbMapWidgetV2 {
         this.locationSettings.showLabel = this.ctx.settings.showLabel !== false;
         this.locationSettings.displayTooltip = this.ctx.settings.showTooltip !== false;
         this.locationSettings.autocloseTooltip = this.ctx.settings.autocloseTooltip !== false;
-        this.locationSettings.labelColor = this.ctx.widgetConfig.color || '#000000',
-        this.locationSettings.label = this.ctx.settings.label || "${entityName}";
+        this.locationSettings.labelColor = this.ctx.widgetConfig.color || '#000000', this.locationSettings.label = this.ctx.settings.label || "${entityName}";
         this.locationSettings.color = this.ctx.settings.color ? tinycolor(this.ctx.settings.color).toHexString() : "#FE7569";
 
         this.locationSettings.useLabelFunction = this.ctx.settings.useLabelFunction === true;
@@ -207,8 +218,9 @@ export default class TbMapWidgetV2 {
     }
 
     update() {
-
         var tbMap = this;
+        tbMap.alarmMarkers = [];
+        tbMap.toFit = false;
 
         function updateLocationLabel(location, dataMap) {
             if (location.settings.showLabel) {
@@ -282,6 +294,15 @@ export default class TbMapWidgetV2 {
             }
         }
 
+        //将警报置为地图中心
+        function setAlarmCenter() {
+            var bounds = tbMap.map.createBounds();
+            for (var i = 0; i < tbMap.alarmMarkers.length; i++) {
+                tbMap.map.extendBoundsWithMarker(bounds, tbMap.alarmMarkers[i]);
+            }
+            tbMap.map.fitBounds(bounds);
+        }
+
         function updateLocationStyle(location, dataMap) {
             updateLocationLabel(location, dataMap);
             var color = calculateLocationColor(location, dataMap);
@@ -290,25 +311,34 @@ export default class TbMapWidgetV2 {
             updateLocationMarkerIcon(location, image);
         }
 
-        function createOrUpdateLocationMarker(location, markerLocation, dataMap) {
+        function createOrUpdateLocationMarker(location, markerLocation, dataMap, toDraw) {
             var changed = false;
             if (!location.marker) {
                 var image = calculateLocationMarkerImage(location, dataMap);
                 if (image && (!location.settings.currentImage || !angular.equals(location.settings.currentImage, image))) {
                     location.settings.currentImage = image;
                 }
+
                 location.marker = tbMap.map.createMarker(markerLocation, location.dsIndex, location.settings,
                     function (event) {
+                        //tbMap.map.getHistoryAlarmBoxValue();
                         tbMap.callbacks.onLocationClick(location);
                         locationRowClick(event, location);
                     }, [location.dsIndex]);
+
                 tbMap.markers.push(location.marker);
+                if(toDraw) {
+                    tbMap.alarmMarkers.push(location.marker);
+                }
                 changed = true;
             } else {
                 var prevPosition = tbMap.map.getMarkerPosition(location.marker);
                 if (!prevPosition.equals(markerLocation)) {
                     tbMap.map.setMarkerPosition(location.marker, markerLocation);
                     changed = true;
+                }
+                if(toDraw) {
+                    tbMap.alarmMarkers.push(location.marker);
                 }
             }
             return changed;
@@ -326,13 +356,40 @@ export default class TbMapWidgetV2 {
             }
         }
 
-        function updateLocation(location, data, dataMap) {
+        function updateLocation(location, data, dataMap, alarmInfoPassed) {
             var locationChanged = false;
-            if (location.latIndex > -1 && location.lngIndex > -1) {
+            var toDraw = false;
+
+            if (location.latIndex > -1 && location.lngIndex > -1 &&
+                location.tempTrhIndex > -1 && location.tempValIndex > -1 &&
+                location.orpTrhIndex > -1 && location.orpValIndex > -1 &&
+                location.doTrhIndex > -1 && location.doValIndex > -1 &&
+                location.phTrhIndex > -1 && location.phValIndex > -1 &&
+                location.ecTrhIndex > -1 && location.ecValIndex > -1) {
+
                 var latData = data[location.latIndex].data;
                 var lngData = data[location.lngIndex].data;
+                // change
+                var tempTrhData = data[location.tempTrhIndex].data;
+                var tempValData = data[location.tempValIndex].data;
+                var phTrhData = data[location.phTrhIndex].data;
+                var phValData = data[location.phValIndex].data;
+                var orpTrhData = data[location.orpTrhIndex].data;
+                var orpValData = data[location.orpValIndex].data;
+                var doTrhData = data[location.doTrhIndex].data;
+                var doValData = data[location.doValIndex].data;
+                var ecTrhData = data[location.ecTrhIndex].data;
+                var ecValData = data[location.ecValIndex].data;
                 var lat, lng, latLng;
-                if (latData.length > 0 && lngData.length > 0) {
+                var tempTrh, tempVal, phTrh, phVal, orpTrh, orpVal, doTrh, doVal, ecTrh, ecVal;
+
+                if (latData.length > 0 && lngData.length > 0 &&
+                    tempTrhData.length > 0 && tempValData.length > 0 &&
+                    phTrhData.length > 0 && phValData.length > 0 &&
+                    orpTrhData.length > 0 && orpValData.length > 0 &&
+                    doTrhData.length > 0 && doValData.length > 0 &&
+                    ecTrhData.length > 0 && ecValData.length > 0 ) {
+
                     if (tbMap.drawRoutes) {
                         // Create or update route
                         var latLngs = [];
@@ -348,7 +405,7 @@ export default class TbMapWidgetV2 {
                         }
                         if (latLngs.length > 0) {
                             var markerLocation = latLngs[latLngs.length - 1];
-                            createOrUpdateLocationMarker(location, markerLocation, dataMap);
+                            createOrUpdateLocationMarker(location, markerLocation, dataMap, false);
                         }
                         if (!location.polyline) {
                             location.polyline = tbMap.map.createPolyline(latLngs, location.settings);
@@ -365,9 +422,95 @@ export default class TbMapWidgetV2 {
                         // Create or update marker
                         lat = latData[latData.length - 1][1];
                         lng = lngData[lngData.length - 1][1];
-                        if (angular.isDefined(lat) && lat != null && angular.isDefined(lng) && lng != null) {
-                            latLng = tbMap.map.createLatLng(lat, lng);
-                            if (createOrUpdateLocationMarker(location, latLng, dataMap)) {
+                        // change
+                        tempTrh = tempTrhData[tempTrhData.length - 1][1];
+                        tempVal = tempValData[tempValData.length - 1][1];
+                        phTrh = phTrhData[phTrhData.length - 1][1];
+                        phVal = phValData[phValData.length - 1][1];
+                        orpTrh = orpTrhData[orpTrhData.length - 1][1];
+                        orpVal = orpValData[orpValData.length - 1][1];
+                        doVal = doValData[doValData.length - 1][1];
+                        doTrh = doTrhData[doTrhData.length - 1][1];
+                        ecVal = ecValData[ecValData.length - 1][1];
+                        ecTrh = ecTrhData[ecTrhData.length - 1][1];
+
+                        if (tbMap.map.tempTrh == 9999) {
+                            tbMap.map.tempTrh = tempTrh;
+                            tbMap.map.phTrh = phTrh;
+                            tbMap.map.orpTrh = orpTrh;
+                            tbMap.map.doTrh = doTrh;
+                            tbMap.map.ecTrh = ecTrh;
+                        }
+
+                        if (angular.isDefined(lat) && lat != null &&
+                            angular.isDefined(lng) && lng != null &&
+                            angular.isDefined(tempTrh) && tempTrh != null && angular.isDefined(tempVal) && tempVal != null &&
+                            angular.isDefined(phTrh) && phTrh != null && angular.isDefined(phVal) && phVal != null &&
+                            angular.isDefined(orpTrh) && orpTrh != null && angular.isDefined(orpVal) && orpVal != null &&
+                            angular.isDefined(doTrh) && doTrh != null && angular.isDefined(doVal) && doVal != null &&
+                            angular.isDefined(ecTrh) && ecTrh != null && angular.isDefined(ecVal) && ecVal != null ) {
+
+                            console.log(alarmInfoPassed);// eslint-disable-line
+
+                            if (tbMap.map.alarmInfos.length != tbMap.locations.length) {
+
+                                var alarmInfo = {
+                                    lat: lat,
+                                    lng: lng,
+                                    tempVal: tempVal,
+                                    phVal: phVal,
+                                    orpVal: orpVal,
+                                    doVal: doVal,
+                                    ecVal: ecVal,
+                                    dsIndex: location.dsIndex,
+                                    drawShowed: false
+                                };
+
+                                tbMap.map.alarmInfos.push(alarmInfo);
+                                tbMap.map.historyAlarmTemp.push(tempVal);
+                                tbMap.map.historyAlarmPh.push(phVal);
+                                tbMap.map.historyAlarmOrp.push(orpVal);
+                                tbMap.map.historyAlarmDo.push(doVal);
+                                tbMap.map.historyAlarmEc.push(ecVal);
+                            }
+                            else {
+
+                                // replace history alarm value
+                                if (tempVal > tbMap.map.tempTrh) {
+                                    tbMap.map.historyAlarmTemp[location.dsIndex] = tempVal;
+                                }
+                                if (phVal > tbMap.map.phTrh) {
+                                    tbMap.map.historyAlarmPh[location.dsIndex] = phVal;
+                                }
+                                if (orpVal > tbMap.map.orpTrh) {
+                                    tbMap.map.historyAlarmOrp[location.dsIndex] = orpVal;
+                                }
+                                if (doVal > tbMap.map.doTrh) {
+                                    tbMap.map.historyAlarmDo[location.dsIndex] = doVal;
+                                }
+                                if (ecVal > tbMap.map.ecTrh) {
+                                    tbMap.map.historyAlarmEc[location.dsIndex] = ecVal;
+                                }
+
+                                tbMap.map.alarmInfos[location.dsIndex].tempVal = tempVal;
+                                tbMap.map.alarmInfos[location.dsIndex].phVal = phVal;
+                                tbMap.map.alarmInfos[location.dsIndex].orpVal = orpVal;
+                                tbMap.map.alarmInfos[location.dsIndex].doVal = doVal;
+                                tbMap.map.alarmInfos[location.dsIndex].ecVal = ecVal;
+
+                            }
+
+                            // do some change 当节点检测值大于阈值时，绘制
+                            if(tempVal > tempTrh || phVal > phTrh || orpVal > orpTrh || doVal > doTrh || ecVal > ecTrh) {
+                                latLng = tbMap.map.createLatLng(lat, lng);
+                                toDraw = true;
+                                tbMap.toFit = true;
+                            }
+                            else {
+                                latLng = tbMap.map.createLatLng(lat, lng);
+                                toDraw = false;
+                            }
+                            if (createOrUpdateLocationMarker(location, latLng, dataMap, toDraw)) {
                                 locationChanged = true;
                             }
                         }
@@ -383,11 +526,25 @@ export default class TbMapWidgetV2 {
         function loadLocations(data, datasources) {
             var bounds = tbMap.map.createBounds();
             tbMap.locations = [];
+            tbMap.toFit = false;
+            var alarmInfoPassed = false;
+
             var dataMap = toLabelValueMap(data, datasources);
             var currentDatasource = null;
             var currentDatasourceIndex = -1;
             var latIndex = -1;
             var lngIndex = -1;
+            // change
+            var tempTrhIndex = -1;
+            var tempValIndex = -1;
+            var phTrhIndex = -1;
+            var phValIndex = -1;
+            var orpTrhIndex = -1;
+            var orpValIndex = -1;
+            var doTrhIndex = -1;
+            var doValIndex = -1;
+            var ecTrhIndex = -1;
+            var ecValIndex = -1;
 
             for (var i=0;i<data.length;i++) {
                 var dataKeyData = data[i];
@@ -397,6 +554,16 @@ export default class TbMapWidgetV2 {
                     currentDatasourceIndex++;
                     latIndex = -1;
                     lngIndex = -1;
+                    tempTrhIndex = -1;
+                    tempValIndex = -1;
+                    phTrhIndex = -1;
+                    phValIndex = -1;
+                    orpTrhIndex = -1;
+                    orpValIndex = -1;
+                    doTrhIndex = -1;
+                    doValIndex = -1;
+                    ecTrhIndex = -1;
+                    ecValIndex = -1;
                 }
                 var nameToCheck;
                 if (dataKey.locationAttrName) {
@@ -404,18 +571,59 @@ export default class TbMapWidgetV2 {
                 } else {
                     nameToCheck = dataKey.label;
                 }
+
                 if (nameToCheck === tbMap.locationSettings.latKeyName) {
                     latIndex = i;
                 } else if (nameToCheck === tbMap.locationSettings.lngKeyName) {
                     lngIndex = i;
+                } else if (nameToCheck === tbMap.locationSettings.tempTrhKeyName){
+                    tempTrhIndex = i;
+                } else if (nameToCheck === tbMap.locationSettings.tempValKeyName){
+                    tempValIndex = i;
+                }else if (nameToCheck === tbMap.locationSettings.phTrhKeyName){
+                    phTrhIndex = i;
+                } else if (nameToCheck === tbMap.locationSettings.phValKeyName){
+                    phValIndex = i;
+                }else if (nameToCheck === tbMap.locationSettings.orpTrhKeyName){
+                    orpTrhIndex = i;
+                } else if (nameToCheck === tbMap.locationSettings.orpValKeyName){
+                    orpValIndex = i;
+                }else if (nameToCheck === tbMap.locationSettings.doTrhKeyName){
+                    doTrhIndex = i;
+                } else if (nameToCheck === tbMap.locationSettings.doValKeyName){
+                    doValIndex = i;
+                }else if (nameToCheck === tbMap.locationSettings.ecTrhKeyName){
+                    ecTrhIndex = i;
+                } else if (nameToCheck === tbMap.locationSettings.ecValKeyName){
+                    ecValIndex = i;
                 }
-                if (latIndex > -1 && lngIndex > -1) {
+
+                // if only latitude & longitude provided, how?
+                // change
+                if (latIndex > -1 && lngIndex > -1 &&
+                    tempTrhIndex > -1 && tempValIndex > -1 &&
+                    phTrhIndex > -1 && phValIndex > -1 &&
+                    orpTrhIndex > -1 && orpValIndex > -1 &&
+                    doTrhIndex > -1 && doValIndex > -1 &&
+                    ecTrhIndex > -1 && ecValIndex > -1 ) {
+
                     var location = {
                         latIndex: latIndex,
                         lngIndex: lngIndex,
+                        tempTrhIndex: tempTrhIndex,
+                        tempValIndex: tempValIndex,
+                        phTrhIndex: phTrhIndex,
+                        phValIndex: phValIndex,
+                        orpTrhIndex: orpTrhIndex,
+                        orpValIndex: orpValIndex,
+                        doTrhIndex: doTrhIndex,
+                        doValIndex: doValIndex,
+                        ecTrhIndex: ecTrhIndex,
+                        ecValIndex: ecValIndex,
                         dsIndex: currentDatasourceIndex,
                         settings: angular.copy(tbMap.locationSettings)
                     };
+
                     if (location.settings.showLabel) {
                         location.settings.label = tbMap.utils.createLabelFromDatasource(currentDatasource, location.settings.label);
                         location.settings.labelReplaceInfo = processPattern(location.settings.label, datasources, currentDatasourceIndex);
@@ -427,7 +635,7 @@ export default class TbMapWidgetV2 {
                     }
 
                     tbMap.locations.push(location);
-                    updateLocation(location, data, dataMap);
+                    updateLocation(location, data, dataMap, alarmInfoPassed);
                     if (location.polyline) {
                         tbMap.map.extendBounds(bounds, location.polyline);
                     } else if (location.marker) {
@@ -435,28 +643,68 @@ export default class TbMapWidgetV2 {
                     }
                     latIndex = -1;
                     lngIndex = -1;
+                    // change
+                    tempTrhIndex = -1;
+                    tempValIndex = -1;
+                    phTrhIndex = -1;
+                    phValIndex = -1;
+                    orpTrhIndex = -1;
+                    orpValIndex = -1;
+                    doTrhIndex = -1;
+                    doValIndex = -1;
+                    ecTrhIndex = -1;
+                    ecValIndex = -1;
                 }
 
             }
+
             tbMap.map.fitBounds(bounds);
+
+            if (tbMap.alarmMarkers.length > 0) {
+                setAlarmCenter();
+                tbMap.alarmMarkers = [];
+            }
+
+            if (!tbMap.toFit) {
+                tbMap.map.fitBounds(bounds);
+            }
         }
 
         function updateLocations(data, datasources) {
+            var alarmInfoPassed = true;
             var locationsChanged = false;
             var bounds = tbMap.map.createBounds();
             var dataMap = toLabelValueMap(data, datasources);
+            tbMap.toFit = false;
+
             for (var p = 0; p < tbMap.locations.length; p++) {
                 var location = tbMap.locations[p];
-                locationsChanged |= updateLocation(location, data, dataMap);
+                locationsChanged |= updateLocation(location, data, dataMap, alarmInfoPassed);
                 if (location.polyline) {
                     tbMap.map.extendBounds(bounds, location.polyline);
                 } else if (location.marker) {
                     tbMap.map.extendBoundsWithMarker(bounds, location.marker);
                 }
             }
-            if (locationsChanged) {
+
+            if (locationsChanged && tbMap.initBounds) {
+                tbMap.initBounds = !datasources.every(
+                    function (ds) {
+                        return ds.dataReceived === true;
+                    });
                 tbMap.map.fitBounds(bounds);
             }
+
+            if (tbMap.alarmMarkers.length > 0) {
+                setAlarmCenter();
+                tbMap.alarmMarkers = [];
+            }
+
+            if (!tbMap.toFit) {
+                tbMap.map.fitBounds(bounds);
+            }
+
+
         }
 
         function createTooltipContent(tooltip, data, datasources) {
@@ -477,10 +725,9 @@ export default class TbMapWidgetV2 {
             content = fillPattern(settings.tooltipPattern, settings.tooltipReplaceInfo, data);
             return fillPatternWithActions(content, 'onTooltipAction', tooltip.markerArgs);
         }
-
         if (this.map && this.map.inited() && this.subscription) {
             if (this.subscription.data) {
-                if (!this.locations) {
+                if (this.map.alarmInfos.length == 0) {
                     loadLocations(this.subscription.data, this.subscription.datasources);
                 } else {
                     updateLocations(this.subscription.data, this.subscription.datasources);
@@ -494,14 +741,13 @@ export default class TbMapWidgetV2 {
             }
         }
     }
-
     resize() {
         if (this.map && this.map.inited()) {
             this.map.invalidateSize();
             if (this.locations && this.locations.length > 0) {
                 var bounds = this.map.createBounds();
-                for (var m = 0; m < this.markers.length; m++) {
-                    this.map.extendBoundsWithMarker(bounds, this.markers[m]);
+                for (var n = 0; n < this.markers.length; n++) {
+                    this.map.extendBoundsWithMarker(bounds, this.markers[n]);
                 }
                 if (this.polylines) {
                     for (var p = 0; p < this.polylines.length; p++) {
@@ -601,7 +847,7 @@ const googleMapSettingsSchema =
             }
         ]
     };
-    
+
 const tencentMapSettingsSchema =
     {
         "schema":{
@@ -645,7 +891,7 @@ const tencentMapSettingsSchema =
             }
         ]
     };
-    
+
 const openstreetMapSettingsSchema =
     {
         "schema":{
@@ -862,7 +1108,7 @@ const commonMapSettingsSchema =
                 ]
             }
         ]
-};
+    };
 
 const routeMapSettingsSchema =
     {
@@ -891,196 +1137,197 @@ const routeMapSettingsSchema =
     };
 
 const imageMapSettingsSchema =
-{
-    "schema":{
-        "title":"Image Map Configuration",
-        "type":"object",
-        "properties":{
-            "mapImageUrl": {
-                "title": "Image map background",
-                "type": "string",
-                "default": "data:image/svg+xml;base64,PHN2ZyBpZD0ic3ZnMiIgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMTAwIiB3aWR0aD0iMTAwIiB2ZXJzaW9uPSIxLjEiIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgdmlld0JveD0iMCAwIDEwMCAxMDAiPgogPGcgaWQ9ImxheWVyMSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCAtOTUyLjM2KSI+CiAgPHJlY3QgaWQ9InJlY3Q0Njg0IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBoZWlnaHQ9Ijk5LjAxIiB3aWR0aD0iOTkuMDEiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiB5PSI5NTIuODYiIHg9Ii40OTUwNSIgc3Ryb2tlLXdpZHRoPSIuOTkwMTAiIGZpbGw9IiNlZWUiLz4KICA8dGV4dCBpZD0idGV4dDQ2ODYiIHN0eWxlPSJ3b3JkLXNwYWNpbmc6MHB4O2xldHRlci1zcGFjaW5nOjBweDt0ZXh0LWFuY2hvcjptaWRkbGU7dGV4dC1hbGlnbjpjZW50ZXIiIGZvbnQtd2VpZ2h0PSJib2xkIiB4bWw6c3BhY2U9InByZXNlcnZlIiBmb250LXNpemU9IjEwcHgiIGxpbmUtaGVpZ2h0PSIxMjUlIiB5PSI5NzAuNzI4MDkiIHg9IjQ5LjM5NjQ3NyIgZm9udC1mYW1pbHk9IlJvYm90byIgZmlsbD0iIzY2NjY2NiI+PHRzcGFuIGlkPSJ0c3BhbjQ2OTAiIHg9IjUwLjY0NjQ3NyIgeT0iOTcwLjcyODA5Ij5JbWFnZSBiYWNrZ3JvdW5kIDwvdHNwYW4+PHRzcGFuIGlkPSJ0c3BhbjQ2OTIiIHg9IjQ5LjM5NjQ3NyIgeT0iOTgzLjIyODA5Ij5pcyBub3QgY29uZmlndXJlZDwvdHNwYW4+PC90ZXh0PgogIDxyZWN0IGlkPSJyZWN0NDY5NCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgaGVpZ2h0PSIxOS4zNiIgd2lkdGg9IjY5LjM2IiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgeT0iOTkyLjY4IiB4PSIxNS4zMiIgc3Ryb2tlLXdpZHRoPSIuNjM5ODYiIGZpbGw9Im5vbmUiLz4KIDwvZz4KPC9zdmc+Cg=="
-            },
-            "imageEntityAlias": {
-                "title": "Image URL source entity alias",
-                "type": "string",
-                "default": ""
-            },
-            "imageUrlAttribute": {
-                "title": "Image URL source entity attribute",
-                "type": "string",
-                "default": ""
-            },
-            "xPosKeyName":{
-                "title":"X position key name",
-                "type":"string",
-                "default":"xPos"
-            },
-            "yPosKeyName":{
-                "title":"Y position key name",
-                "type":"string",
-                "default":"yPos"
-            },
-            "showLabel":{
-                "title":"Show label",
-                "type":"boolean",
-                "default":true
-            },
-            "label":{
-                "title":"Label (pattern examples: '${entityName}', '${entityName}: (Text ${keyName} units.)' )",
-                "type":"string",
-                "default":"${entityName}"
-            },
-            "useLabelFunction": {
-                "title":"Use label function",
-                "type":"boolean",
-                "default":false
-            },
-            "labelFunction":{
-                "title":"Label function: f(data, dsData, dsIndex)",
-                "type":"string"
-            },
-            "showTooltip": {
-                "title": "Show tooltip",
-                "type":"boolean",
-                "default":true
-            },
-            "autocloseTooltip": {
-                "title": "Auto-close tooltips",
-                "type":"boolean",
-                "default":true
-            },
-            "tooltipPattern":{
-                "title":"Tooltip (for ex. 'Text ${keyName} units.' or <link-act name='my-action'>Link text</link-act>')",
-                "type":"string",
-                "default":"<b>${entityName}</b><br/><br/><b>X Pos:</b> ${xPos:2}<br/><b>Y Pos:</b> ${yPos:2}"
-            },
-            "useTooltipFunction": {
-                "title":"Use tooltip function",
-                "type":"boolean",
-                "default":false
-            },
-            "tooltipFunction":{
-                "title":"Tooltip function: f(data, dsData, dsIndex)",
-                "type":"string"
-            },
-            "color":{
-                "title":"Color",
-                "type":"string"
-            },
-            "posFunction":{
-                "title":"Position conversion function: f(origXPos, origYPos), should return x,y coordinates as double from 0 to 1 each",
-                "type":"string",
-                "default": "return {x: origXPos, y: origYPos};"
-            },
-            "markerOffsetX": {
-                "title": "Marker X offset relative to position",
-                "type": "number",
-                "default": 0.5
-            },
-            "markerOffsetY": {
-                "title": "Marker Y offset relative to position",
-                "type": "number",
-                "default": 1
-            },
-            "useColorFunction":{
-                "title":"Use color function",
-                "type":"boolean",
-                "default":false
-            },
-            "colorFunction":{
-                "title":"Color function: f(data, dsData, dsIndex)",
-                "type":"string"
-            },
-            "markerImage":{
-                "title":"Custom marker image",
-                "type":"string"
-            },
-            "markerImageSize":{
-                "title":"Custom marker image size (px)",
-                "type":"number",
-                "default":34
-            },
-            "useMarkerImageFunction":{
-                "title":"Use marker image function",
-                "type":"boolean",
-                "default":false
-            },
-            "markerImageFunction":{
-                "title":"Marker image function: f(data, images, dsData, dsIndex)",
-                "type":"string"
-            },
-            "markerImages":{
-                "title":"Marker images",
-                "type":"array",
-                "items":{
-                    "title":"Marker image",
+    {
+        "schema":{
+            "title":"Image Map Configuration",
+            "type":"object",
+            "properties":{
+                "mapImageUrl": {
+                    "title": "Image map background",
+                    "type": "string",
+                    "default": "data:image/svg+xml;base64,PHN2ZyBpZD0ic3ZnMiIgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMTAwIiB3aWR0aD0iMTAwIiB2ZXJzaW9uPSIxLjEiIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgdmlld0JveD0iMCAwIDEwMCAxMDAiPgogPGcgaWQ9ImxheWVyMSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMCAtOTUyLjM2KSI+CiAgPHJlY3QgaWQ9InJlY3Q0Njg0IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBoZWlnaHQ9Ijk5LjAxIiB3aWR0aD0iOTkuMDEiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiB5PSI5NTIuODYiIHg9Ii40OTUwNSIgc3Ryb2tlLXdpZHRoPSIuOTkwMTAiIGZpbGw9IiNlZWUiLz4KICA8dGV4dCBpZD0idGV4dDQ2ODYiIHN0eWxlPSJ3b3JkLXNwYWNpbmc6MHB4O2xldHRlci1zcGFjaW5nOjBweDt0ZXh0LWFuY2hvcjptaWRkbGU7dGV4dC1hbGlnbjpjZW50ZXIiIGZvbnQtd2VpZ2h0PSJib2xkIiB4bWw6c3BhY2U9InByZXNlcnZlIiBmb250LXNpemU9IjEwcHgiIGxpbmUtaGVpZ2h0PSIxMjUlIiB5PSI5NzAuNzI4MDkiIHg9IjQ5LjM5NjQ3NyIgZm9udC1mYW1pbHk9IlJvYm90byIgZmlsbD0iIzY2NjY2NiI+PHRzcGFuIGlkPSJ0c3BhbjQ2OTAiIHg9IjUwLjY0NjQ3NyIgeT0iOTcwLjcyODA5Ij5JbWFnZSBiYWNrZ3JvdW5kIDwvdHNwYW4+PHRzcGFuIGlkPSJ0c3BhbjQ2OTIiIHg9IjQ5LjM5NjQ3NyIgeT0iOTgzLjIyODA5Ij5pcyBub3QgY29uZmlndXJlZDwvdHNwYW4+PC90ZXh0PgogIDxyZWN0IGlkPSJyZWN0NDY5NCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgaGVpZ2h0PSIxOS4zNiIgd2lkdGg9IjY5LjM2IiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgeT0iOTkyLjY4IiB4PSIxNS4zMiIgc3Ryb2tlLXdpZHRoPSIuNjM5ODYiIGZpbGw9Im5vbmUiLz4KIDwvZz4KPC9zdmc+Cg=="
+                },
+                "imageEntityAlias": {
+                    "title": "Image URL source entity alias",
+                    "type": "string",
+                    "default": ""
+                },
+                "imageUrlAttribute": {
+                    "title": "Image URL source entity attribute",
+                    "type": "string",
+                    "default": ""
+                },
+                "xPosKeyName":{
+                    "title":"X position key name",
+                    "type":"string",
+                    "default":"xPos"
+                },
+                "yPosKeyName":{
+                    "title":"Y position key name",
+                    "type":"string",
+                    "default":"yPos"
+                },
+                "showLabel":{
+                    "title":"Show label",
+                    "type":"boolean",
+                    "default":true
+                },
+                "label":{
+                    "title":"Label (pattern examples: '${entityName}', '${entityName}: (Text ${keyName} units.)' )",
+                    "type":"string",
+                    "default":"${entityName}"
+                },
+                "useLabelFunction": {
+                    "title":"Use label function",
+                    "type":"boolean",
+                    "default":false
+                },
+                "labelFunction":{
+                    "title":"Label function: f(data, dsData, dsIndex)",
                     "type":"string"
+                },
+                "showTooltip": {
+                    "title": "Show tooltip",
+                    "type":"boolean",
+                    "default":true
+                },
+                "autocloseTooltip": {
+                    "title": "Auto-close tooltips",
+                    "type":"boolean",
+                    "default":true
+                },
+                "tooltipPattern":{
+                    "title":"Tooltip (for ex. 'Text ${keyName} units.' or <link-act name='my-action'>Link text</link-act>')",
+                    "type":"string",
+                    "default":"<b>${entityName}</b><br/><br/><b>X Pos:</b> ${xPos:2}<br/><b>Y Pos:</b> ${yPos:2}"
+                },
+                "useTooltipFunction": {
+                    "title":"Use tooltip function",
+                    "type":"boolean",
+                    "default":false
+                },
+                "tooltipFunction":{
+                    "title":"Tooltip function: f(data, dsData, dsIndex)",
+                    "type":"string"
+                },
+                "color":{
+                    "title":"Color",
+                    "type":"string"
+                },
+                "posFunction":{
+                    "title":"Position conversion function: f(origXPos, origYPos), should return x,y coordinates as double from 0 to 1 each",
+                    "type":"string",
+                    "default": "return {x: origXPos, y: origYPos};"
+                },
+                "markerOffsetX": {
+                    "title": "Marker X offset relative to position",
+                    "type": "number",
+                    "default": 0.5
+                },
+                "markerOffsetY": {
+                    "title": "Marker Y offset relative to position",
+                    "type": "number",
+                    "default": 1
+                },
+                "useColorFunction":{
+                    "title":"Use color function",
+                    "type":"boolean",
+                    "default":false
+                },
+                "colorFunction":{
+                    "title":"Color function: f(data, dsData, dsIndex)",
+                    "type":"string"
+                },
+                "markerImage":{
+                    "title":"Custom marker image",
+                    "type":"string"
+                },
+                "markerImageSize":{
+                    "title":"Custom marker image size (px)",
+                    "type":"number",
+                    "default":34
+                },
+                "useMarkerImageFunction":{
+                    "title":"Use marker image function",
+                    "type":"boolean",
+                    "default":false
+                },
+                "markerImageFunction":{
+                    "title":"Marker image function: f(data, images, dsData, dsIndex)",
+                    "type":"string"
+                },
+                "markerImages":{
+                    "title":"Marker images",
+                    "type":"array",
+                    "items":{
+                        "title":"Marker image",
+                        "type":"string"
+                    }
                 }
+            },
+            "required":[]
+        },
+        "form":[
+            {
+                "key": "mapImageUrl",
+                "type": "image"
+            },
+            "imageEntityAlias",
+            "imageUrlAttribute",
+            "xPosKeyName",
+            "yPosKeyName",
+            "showLabel",
+            "label",
+            "useLabelFunction",
+            {
+                "key":"labelFunction",
+                "type":"javascript"
+            },
+            "showTooltip",
+            "autocloseTooltip",
+            {
+                "key": "tooltipPattern",
+                "type": "textarea"
+            },
+            "useTooltipFunction",
+            {
+                "key":"tooltipFunction",
+                "type":"javascript"
+            },
+            {
+                "key":"color",
+                "type":"color"
+            },
+            {
+                "key":"posFunction",
+                "type":"javascript"
+            },
+            "markerOffsetX",
+            "markerOffsetY",
+            "useColorFunction",
+            {
+                "key":"colorFunction",
+                "type":"javascript"
+            },
+            {
+                "key":"markerImage",
+                "type":"image"
+            },
+            "markerImageSize",
+            "useMarkerImageFunction",
+            {
+                "key":"markerImageFunction",
+                "type":"javascript"
+            },
+            {
+                "key":"markerImages",
+                "items":[
+                    {
+                        "key":"markerImages[]",
+                        "type":"image"
+                    }
+                ]
             }
-        },
-        "required":[]
-    },
-    "form":[
-        {
-            "key": "mapImageUrl",
-            "type": "image"
-        },
-        "imageEntityAlias",
-        "imageUrlAttribute",
-        "xPosKeyName",
-        "yPosKeyName",
-        "showLabel",
-        "label",
-        "useLabelFunction",
-        {
-            "key":"labelFunction",
-            "type":"javascript"
-        },
-        "showTooltip",
-        "autocloseTooltip",
-        {
-            "key": "tooltipPattern",
-            "type": "textarea"
-        },
-        "useTooltipFunction",
-        {
-            "key":"tooltipFunction",
-            "type":"javascript"
-        },
-        {
-            "key":"color",
-            "type":"color"
-        },
-        {
-            "key":"posFunction",
-            "type":"javascript"
-        },
-        "markerOffsetX",
-        "markerOffsetY",
-        "useColorFunction",
-        {
-            "key":"colorFunction",
-            "type":"javascript"
-        },
-        {
-            "key":"markerImage",
-            "type":"image"
-        },
-        "markerImageSize",
-        "useMarkerImageFunction",
-        {
-            "key":"markerImageFunction",
-            "type":"javascript"
-        },
-        {
-            "key":"markerImages",
-            "items":[
-                {
-                    "key":"markerImages[]",
-                    "type":"image"
-                }
-            ]
-        }
-    ]
-};
+        ]
+    };
+

@@ -25,8 +25,21 @@ export default class TbTencentMap {
         this.defaultZoomLevel = defaultZoomLevel;
         this.dontFitMapBounds = dontFitMapBounds;
         this.minZoomLevel = minZoomLevel;
+        this.alarmInfos = [];
+        this.historyAlarmTemp = [];
+        this.historyAlarmPh = [];
+        this.historyAlarmOrp = [];
+        this.historyAlarmDo = [];
+        this.historyAlarmEc = [];
+        this.draws = [];
         this.tooltips = [];
         this.defaultMapType = tmDefaultMapType;
+
+        this.tempTrh = 9999;
+        this.phTrh = 9999;
+        this.orpTrh = 9999;
+        this.doTrh = 9999;
+        this.ecTrh = 9999;
 
         function clearGlobalId() {
             if (tmGlobals.loadingTmId && tmGlobals.loadingTmId === tbMap.mapId) {
@@ -47,27 +60,41 @@ export default class TbTencentMap {
                 zoom: tbMap.defaultZoomLevel || 8
             });
 
+            // create history control
+            tbMap.historyControl = new qq.maps.Control({// eslint-disable-line no-undef
+                // 0 for history, 1 for latest data
+                content: "<select id='double'><option value=0>历史数据</option><option value=1>最新数据</option></select>",
+                //align: qq.maps.ALIGN.TOP_RIGHT,// eslint-disable-line no-undef
+                map: tbMap.map
+            });
+
+            // create selectControl
+            tbMap.selectControl = new qq.maps.Control({ // eslint-disable-line no-undef
+                // 0 for null, 1 for alarmA, 2 for alarmB
+                content: "<select id='single'><option value=0>无</option><option value=1>TEMP</option><option value=2>PH</option><option value=3>ORP</option><option value=4>DO</option><option value=5>EC</option></select>",
+                //align: qq.maps.ALIGN.TOP_RIGHT,// eslint-disable-line no-undef
+                map: tbMap.map
+            });
+
             if (initCallback) {
                 initCallback();
             }
         }
 
         /* eslint-disable no-undef */
-
         function getTencentMapTypeId(mapType) {
             var mapTypeId =qq.maps.MapTypeId.ROADMAP;
             if (mapType) {
                 if (mapType === 'hybrid') {
-                   mapTypeId = qq.maps.MapTypeId.HYBRID;
+                    mapTypeId = qq.maps.MapTypeId.HYBRID;
                 } else if (mapType === 'satellite') {
-                   mapTypeId = qq.maps.MapTypeId.SATELLITE;
+                    mapTypeId = qq.maps.MapTypeId.SATELLITE;
                 } else if (mapType === 'terrain') {
-                   mapTypeId = qq.maps.MapTypeId.ROADMAP;
+                    mapTypeId = qq.maps.MapTypeId.ROADMAP;
                 }
             }
             return mapTypeId;
         }
-
         /* eslint-enable no-undef */
 
         this.mapId = '' + Math.random().toString(36).substr(2, 9);
@@ -155,7 +182,7 @@ export default class TbTencentMap {
     updateMarkerColor(marker, color) {
         this.createDefaultMarkerIcon(marker, color, (iconInfo) => {
             marker.setIcon(iconInfo.icon);
-        });
+    });
     }
     /* eslint-enable no-undef,,no-unused-vars */
 
@@ -163,12 +190,153 @@ export default class TbTencentMap {
     updateMarkerIcon(marker, settings) {
         this.createMarkerIcon(marker, settings, (iconInfo) => {
             marker.setIcon(iconInfo.icon);
-            if (marker.label) {
-                marker.label.setOffset(new qq.maps.Size(-100, -iconInfo.size[1]-20));
-            }
-        });
+        if (marker.label) {
+            marker.label.setOffset(new qq.maps.Size(-100, -iconInfo.size[1]-20));
+        }
+    });
     }
+    /* eslint-enable no-undef */
+
     /* eslint-disable no-undef */
+    calculateRadius(dsIndex, history, item) {
+        var tMap = this;
+        var riverRadius = 0;
+        var earthRadius = 0;
+        if (String(history) == "1") {
+            switch (String(item)) {
+                case "1":
+                    riverRadius = (tMap.alarmInfos[dsIndex].tempVal - tMap.tempTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "2":
+                    riverRadius = (tMap.alarmInfos[dsIndex].phVal - tMap.phTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "3":
+                    riverRadius = (tMap.alarmInfos[dsIndex].orpVal - tMap.orpTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "4":
+                    riverRadius = (tMap.alarmInfos[dsIndex].doVal - tMap.doTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "5":
+                    riverRadius = (tMap.alarmInfos[dsIndex].ecVal - tMap.ecTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+            }
+        }
+        else {
+            switch (String(item)) {
+                case "1":
+                    riverRadius = (tMap.historyAlarmTemp[dsIndex] - tMap.tempTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "2":
+                    riverRadius = (tMap.historyAlarmPh[dsIndex] - tMap.phTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "3":
+                    riverRadius = (tMap.historyAlarmOrp[dsIndex] - tMap.orpTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "4":
+                    riverRadius = (tMap.historyAlarmDo[dsIndex] - tMap.doTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+
+                case "5":
+                    riverRadius = (tMap.historyAlarmEc[dsIndex] - tMap.ecTrh) * 60;
+                    earthRadius = riverRadius / 2;
+                    tMap.draws[dsIndex].riverCircle.radius = riverRadius;
+                    tMap.draws[dsIndex].earthCircle.radius = earthRadius;
+                    break;
+            }
+        }
+    }
+    /* eslint-enable no-undef */
+
+    /* eslint-disable no-undef */
+    drawCircle(lat, lng, riverRadius, earthRadius) {
+        var riverCircle=new qq.maps.Circle({
+            map:this.map,
+            center: new qq.maps.LatLng(lat, lng),
+            radius:riverRadius,
+            fillColor: new qq.maps.Color(0, 255, 255, 0.1),
+            strokeWeight:5
+        });
+        riverCircle.setVisible(true);
+
+        var earthCircle=new qq.maps.Circle({
+            map:this.map,
+            center: new qq.maps.LatLng(lat, lng),
+            radius:earthRadius,
+            fillColor: new qq.maps.Color(255, 255, 0, 0.7),
+            strokeWeight:5
+        });
+        earthCircle.setVisible(true);
+
+        var circles = {
+            riverCircle: riverCircle,
+            earthCircle: earthCircle
+        };
+
+        return circles;
+
+    }
+    /* eslint-enable no-undef */
+
+    /* eslint-disable no-undef */
+    clearCircle(circles) {
+        circles.riverCircle.setMap(null);
+        circles.earthCircle.setMap(null);
+    }
+    /* eslint-enable no-undef */
+
+    /* eslint-disable no-undef */
+    openCircle(circles) {
+        var tMap = this;
+        circles.riverCircle.setMap(tMap.map);
+        circles.earthCircle.setMap(tMap.map);
+    }
+    /* eslint-enable no-undef */
+
+    // get drop-down box value
+    /*getDropdownBoxValue(){
+        var item = angular.element(document.getElementById("single")).val();// eslint-disable-line
+        console.log(String(item));// eslint-disable-line
+    }*/
+
+    // get history alarm value
+    /*getHistoryAlarmBoxValue(){
+        var history = angular.element(document.getElementById("double")).val();// eslint-disable-line
+        console.log(String(history));// eslint-disable-line
+    }*/
 
     /* eslint-disable no-undef */
     createMarkerIcon(marker, settings, onMarkerIconReady) {
@@ -177,31 +345,31 @@ export default class TbTencentMap {
         if (currentImage && currentImage.url) {
             this.utils.loadImageAspect(currentImage.url).then(
                 (aspect) => {
-                    if (aspect) {
-                        var width;
-                        var height;
-                        if (aspect > 1) {
-                            width = currentImage.size;
-                            height = currentImage.size / aspect;
-                        } else {
-                            width = currentImage.size * aspect;
-                            height = currentImage.size;
-                        }
-                        var icon = new qq.maps.MarkerImage(currentImage.url,
-                            new qq.maps.Size(width, height),
-                            new qq.maps.Point(0,0),
-                            new qq.maps.Point(width/2, height),
-                            new qq.maps.Size(width, height));
-                        var iconInfo = {
-                            size: [width, height],
-                            icon: icon
-                        };
-                        onMarkerIconReady(iconInfo);
+                if (aspect) {
+                    var width;
+                    var height;
+                    if (aspect > 1) {
+                        width = currentImage.size;
+                        height = currentImage.size / aspect;
                     } else {
-                        tMap.createDefaultMarkerIcon(marker, settings.color, onMarkerIconReady);
+                        width = currentImage.size * aspect;
+                        height = currentImage.size;
                     }
+                    var icon = new qq.maps.MarkerImage(currentImage.url,
+                        new qq.maps.Size(width, height),
+                        new qq.maps.Point(0,0),
+                        new qq.maps.Point(width/2, height),
+                        new qq.maps.Size(width, height));
+                    var iconInfo = {
+                        size: [width, height],
+                        icon: icon
+                    };
+                    onMarkerIconReady(iconInfo);
+                } else {
+                    tMap.createDefaultMarkerIcon(marker, settings.color, onMarkerIconReady);
                 }
-            );
+        }
+        );
         } else {
             this.createDefaultMarkerIcon(marker, settings.color, onMarkerIconReady);
         }
@@ -231,24 +399,27 @@ export default class TbTencentMap {
         var tMap = this;
         this.createMarkerIcon(marker, settings, (iconInfo) => {
             marker.setIcon(iconInfo.icon);
-            marker.setMap(tMap.map);
-            if (settings.showLabel) {
-                marker.label = new qq.maps.Label({
-                    clickable: false,
-                    content: settings.labelText,
-                    offset: new qq.maps.Size(-100, -iconInfo.size[1]-20),
-                    style: tMap.createMarkerLabelStyle(settings),
-                    visible: true,
-                    position: location,
-                    map: tMap.map,
-                    zIndex: 1000
-                });
-            }
-        });
+        marker.setMap(tMap.map);
+        if (settings.showLabel) {
+            marker.label = new qq.maps.Label({
+                clickable: false,
+                content: settings.labelText,
+                offset: new qq.maps.Size(-100, -iconInfo.size[1]-20),
+                style: tMap.createMarkerLabelStyle(settings),
+                visible: true,
+                position: location,
+                map: tMap.map,
+                zIndex: 1000
+            });
+        }
+    });
 
+        // self-defined
         if (settings.displayTooltip) {
             this.createTooltip(marker, dsIndex, settings, markerArgs);
         }
+
+        //this.judgeDrawCircle(marker,dsIndex);
 
         if (onClickListener) {
             qq.maps.event.addListener(marker, 'click', onClickListener);
@@ -256,6 +427,7 @@ export default class TbTencentMap {
 
         return marker;
     }
+    /* eslint-enable no-undef */
 
     /* eslint-disable no-undef */
     removeMarker(marker) {
@@ -264,7 +436,6 @@ export default class TbTencentMap {
             marker.label.setMap(null);
         }
     }
-
     /* eslint-enable no-undef */
 
     /* eslint-disable no-undef */
@@ -273,23 +444,168 @@ export default class TbTencentMap {
             map :this.map
         });
         var map = this;
-        qq.maps.event.addListener(marker, 'click', function() {
+        var listener = qq.maps.event.addListener(marker, 'click', function() {
             if (settings.autocloseTooltip) {
                 map.tooltips.forEach((tooltip) => {
                     tooltip.popup.close();
-                });
+            });
             }
             popup.open();
             popup.setPosition(marker);
         });
+        qq.maps.event.removeListener(listener);
         this.tooltips.push( {
             markerArgs: markerArgs,
             popup: popup,
             locationSettings: settings,
             dsIndex: dsIndex
         });
+
+        var circles = this.drawCircle(this.alarmInfos[dsIndex].lat, this.alarmInfos[dsIndex].lng, 0, 0);
+        //var map = this;
+        qq.maps.event.addListener(marker, 'dblclick', function () {
+
+            //console.log(map.historyAlarmA[dsIndex]);// eslint-disable-line
+            //console.log(map.historyAlarmB[dsIndex]);// eslint-disable-line
+            var alarmInfo = map.alarmInfos[dsIndex];
+            var item = angular.element(document.getElementById("single")).val();// eslint-disable-line
+            var history = angular.element(document.getElementById("double")).val();// eslint-disable-line
+            map.matchAlarm(alarmInfo, dsIndex, history, item);
+
+        });
+        this.draws.push(circles);
     }
     /* eslint-enable no-undef */
+
+    matchAlarm(alarmInfo, dsIndex, history, item) {
+
+        var map = this;
+
+        if (!alarmInfo.drawShowed) {
+
+            if (String(history) == "1") {
+                switch (String(item)) {
+                    case "0":
+                        //console.log("null");// eslint-disable-line
+                        break;
+
+                    case "1":
+                        //console.log("");// eslint-disable-line
+                        if (alarmInfo.tempVal > map.tempTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "2":
+                        //console.log("");// eslint-disable-line
+                        if (alarmInfo.phVal > map.phTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "3":
+                        //console.log("");// eslint-disable-line
+                        if (alarmInfo.orpVal > map.orpTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "4":
+                        //console.log("");// eslint-disable-line
+                        if (alarmInfo.doVal > map.doTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "5":
+                        //console.log("");// eslint-disable-line
+                        if (alarmInfo.ecVal > map.ecTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+                }
+            }
+            else {
+                switch (String(item)) {
+                    case "0":
+                        //console.log("null");// eslint-disable-line
+                        break;
+
+                    case "1":
+                        //console.log("");// eslint-disable-line
+                        if (map.historyAlarmTemp[dsIndex] > map.tempTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "2":
+                        //console.log("");// eslint-disable-line
+                        if (map.historyAlarmPh[dsIndex] > map.phTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "3":
+                        //console.log("");// eslint-disable-line
+                        if (map.historyAlarmOrp[dsIndex] > map.orpTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "4":
+                        //console.log("");// eslint-disable-line
+                        if (map.historyAlarmDo[dsIndex] > map.doTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+                    case "5":
+                        //console.log("");// eslint-disable-line
+                        if (map.historyAlarmEc[dsIndex] > map.ecTrh) {
+                            map.calculateRadius(dsIndex, history, item);
+                            map.openCircle(map.draws[dsIndex]);
+                            alarmInfo.drawShowed = true;
+                            map.alarmInfos[dsIndex] = alarmInfo;
+                        }
+                        break;
+
+
+                }
+            }
+        }
+        else {
+            map.clearCircle(map.draws[dsIndex]);
+            alarmInfo.drawShowed = false;
+            map.alarmInfos[dsIndex] = alarmInfo;
+        }
+    }
 
     /* eslint-disable no-undef */
     updatePolylineColor(polyline, settings, color) {
@@ -388,3 +704,4 @@ export default class TbTencentMap {
     }
 
 }
+
